@@ -1,0 +1,15 @@
+2025-10-30 22:58:30,626 | INFO | \u23f1\ufe0f Scheduled job for user 68e9dc7999150530c44aaaca: https://iphoneunlock.org/includes/cron.php?action=fusion22_updateprice&Other_Fusion_22=true
+2025-10-30 22:58:30,705 | INFO | \u23f1\ufe0f Scheduled job for user 68ff560a8f9b8a21daabd49e: https://ethio-server.com/includes/cron.php?action=fusion11_updateprice&Other_Fusion_11=true
+2025-10-30 22:58:30,706 | INFO | \u23f1\ufe0f Scheduled job for user 68ff560a8f9b8a21daabd49e: https://ethio-server.com/includes/cron.php?action=fusion24_updateprice&Other_Fusion_24=true
+2025-10-30 22:58:30,706 | INFO | \u23f1\ufe0f Scheduled job for user 68ff560a8f9b8a21daabd49e: https://ethio-server.com/includes/cron.php?action=fusion21_updateprice&Other_Fusion_21=true
+2025-10-30 22:58:30,707 | INFO | \u23f1\ufe0f Scheduled job for user 68ff560a8f9b8a21daabd49e: https://ethio-server.com/includes/cron.php?action=fusion61_updateprice&Other_Script_61=true
+2025-10-30 22:58:30,710 | INFO | \U0001fab6 STARTED | https://iphoneunlock.org/includes/cron.php?action=fusion22_updateprice&Other_Fusion_22=true | User: 68e9dc7999150530c44aaaca
+2025-10-30 22:58:30,791 | INFO | \U0001fab6 STARTED | https://ethio-server.com/includes/cron.php?action=fusion11_updateprice&Other_Fusion_11=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:30,791 | INFO | \U0001fab6 STARTED | https://ethio-server.com/includes/cron.php?action=fusion21_updateprice&Other_Fusion_21=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:31,248 | INFO | \U0001fab6 STARTED | https://ethio-server.com/includes/cron.php?action=fusion61_updateprice&Other_Script_61=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:31,258 | INFO | \U0001fab6 STARTED | https://ethio-server.com/includes/cron.php?action=fusion24_updateprice&Other_Fusion_24=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:32,130 | INFO | \U0001fab6 COMPLETED | https://ethio-server.com/includes/cron.php?action=fusion61_updateprice&Other_Script_61=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:34,057 | INFO | \U0001fab6 COMPLETED | https://ethio-server.com/includes/cron.php?action=fusion21_updateprice&Other_Fusion_21=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:35,308 | INFO | \U0001fab6 COMPLETED | https://ethio-server.com/includes/cron.php?action=fusion24_updateprice&Other_Fusion_24=true | User: 68ff560a8f9b8a21daabd49e
+2025-10-30 22:58:50,997 | INFO | \U0001fab6 COMPLETED | https://iphoneunlock.org/includes/cron.php?action=fusion22_updateprice&Other_Fusion_22=true | User: 68e9dc7999150530c44aaaca
+2025-10-30 22:59:00,164 | INFO | \U0001fab6 COMPLETED | https://ethio-server.com/includes/cron.php?action=fusion11_updateprice&Other_Fusion_11=true | User: 68ff560a8f9b8a21daabd49e
