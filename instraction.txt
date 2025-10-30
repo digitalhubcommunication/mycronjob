@@ -1,0 +1,47 @@
+🧩 CASE 1 — If You’re Running via nohup
+🛑 Stop everything:
+pkill -f Update_Price.py
+
+
+That command kills all running Update_Price.py processes.
+
+Optional: verify it’s stopped:
+
+ps aux | grep Update_Price.py
+
+▶️ Start again:
+cd ~/ExpressCronJob/mycronjob
+nohup python3 Update_Price.py > Update_PriceCron_Queue.log 2>&1 &
+
+📄 Check logs:
+tail -f Update_PriceCron_Queue.log
+
+⚙️ CASE 2 — If You Installed as a systemd Service
+🛑 Stop service:
+sudo systemctl stop update_price.service
+
+▶️ Start service:
+sudo systemctl start update_price.service
+
+🔁 Restart service:
+sudo systemctl restart update_price.service
+
+📊 Check status:
+sudo systemctl status update_price.service
+
+📄 View live logs:
+sudo journalctl -u update_price.service -f
+
+💡 Bonus: Make Sure It Starts After Reboot
+
+If you’re using systemd, it will automatically start on reboot because of:
+
+WantedBy=multi-user.target
+
+
+To manually confirm:
+
+sudo systemctl is-enabled update_price.service
+
+
+If it says enabled, you’re good ✅
