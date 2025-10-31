@@ -9,14 +9,17 @@ from dotenv import load_dotenv
 # ----------------- Load Environment -----------------
 load_dotenv()
 
+# MongoDB and General Config
 MONGO_URI = os.getenv("MONGO_URI")
 LOG_FILE = os.getenv("LOG_FILE", "Update_PriceCron_Queue.log")
 
-# Adjustable tuning
-WORKERS = int(os.getenv("WORKERS", 20))  # reduced from 100 → 20
-RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))  # max concurrent network calls
+# Adjustable tuning from .env
+WORKERS = int(os.getenv("WORKERS", 20))
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))
 SCHEDULER_INTERVAL = int(os.getenv("SCHEDULER_INTERVAL", 30))
 HISTORY_CLEAN_HOURS = int(os.getenv("HISTORY_CLEAN_HOURS", 3))
+JOB_INTERVAL_MINUTES = int(os.getenv("JOB_INTERVAL_MINUTES", 60))
+RETRY_INTERVAL_MINUTES = int(os.getenv("RETRY_INTERVAL_MINUTES", 10))
 
 # ----------------- Logging Setup -----------------
 logging.basicConfig(
@@ -24,7 +27,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
-print(f"🚀 Safe Price Update Worker started with {WORKERS} workers and rate limit {RATE_LIMIT}...")
+print(f"🚀 Worker started | Workers={WORKERS}, RateLimit={RATE_LIMIT}")
 
 # ----------------- MongoDB Setup -----------------
 client = AsyncIOMotorClient(MONGO_URI)
@@ -37,20 +40,18 @@ price_update_history_collection = db['price_update_cronjobs_history']
 
 # ----------------- Utilities -----------------
 def safe_datetime(value):
+    """Safely parse various datetime formats to UTC-aware datetime."""
     if not value:
         return None
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
     if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value).astimezone(timezone.utc)
-        except Exception:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%S"):
             try:
-                return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                dt = datetime.strptime(value, fmt)
+                return dt.replace(tzinfo=timezone.utc)
             except Exception:
-                return None
+                continue
     return None
 
 # ----------------- Logging Events -----------------
@@ -65,16 +66,17 @@ async def log_event(job, event_type, error=None):
         "timestamp": now
     }
     await price_update_history_collection.insert_one(doc)
-    logging.info(f"🪶 {event_type.upper()} | {job.get('url')} | User: {job.get('user_id')}")
+    logging.info(f"{event_type.upper()} | {job.get('url')} | User: {job.get('user_id')}")
 
 # ----------------- HTTP Request (Rate-Limited) -----------------
 semaphore = asyncio.Semaphore(RATE_LIMIT)
 
 async def fetch_with_retry(session, url, retries=3, delay=3):
-    async with semaphore:  # ✅ Global rate limit control
+    """Perform HEAD request with limited retries."""
+    async with semaphore:
         for attempt in range(retries):
             try:
-                async with session.head(url, timeout=20) as resp:  # ✅ lightweight HEAD request
+                async with session.head(url, timeout=20) as resp:
                     return resp.status
             except Exception as e:
                 if attempt < retries - 1:
@@ -84,6 +86,7 @@ async def fetch_with_retry(session, url, retries=3, delay=3):
 
 # ----------------- Worker -----------------
 async def worker(queue, session):
+    """Worker process that handles jobs from queue."""
     while True:
         job = await queue.get()
         try:
@@ -93,25 +96,26 @@ async def worker(queue, session):
 
             if status == 200:
                 await log_event(job, "completed")
-                next_run = now + timedelta(minutes=30)
+                next_run = now + timedelta(minutes=JOB_INTERVAL_MINUTES)
             else:
                 await log_event(job, f"failed ({status})")
-                next_run = now + timedelta(minutes=10)
+                next_run = now + timedelta(minutes=RETRY_INTERVAL_MINUTES)
 
         except Exception as e:
             await log_event(job, "error", str(e))
-            next_run = datetime.now(timezone.utc) + timedelta(minutes=10)
+            next_run = datetime.now(timezone.utc) + timedelta(minutes=JOB_INTERVAL_MINUTES)
 
         finally:
             await price_update_collection.update_one(
                 {"_id": job["_id"]},
                 {"$set": {"last_run": next_run.isoformat()}}
             )
-            await asyncio.sleep(1)  # ✅ small cooldown between jobs
+            await asyncio.sleep(1)
             queue.task_done()
 
 # ----------------- Scheduler -----------------
 async def scheduler(queue):
+    """Schedules new jobs for execution."""
     while True:
         try:
             now = datetime.now(timezone.utc)
@@ -132,16 +136,17 @@ async def scheduler(queue):
                     if not last_run or now >= last_run:
                         await queue.put(job)
                         logging.info(f"⏱️ Scheduled job for user {user_id}: {job['url']}")
-                        await asyncio.sleep(0.5)  # ✅ stagger scheduling slightly
+                        await asyncio.sleep(0.5)
 
             await asyncio.sleep(SCHEDULER_INTERVAL)
 
         except Exception as e:
-            logging.error(f"⚠️ Scheduler error: {e}")
+            logging.error(f"Scheduler error: {e}")
             await asyncio.sleep(10)
 
 # ----------------- Cleanup -----------------
 async def cleanup():
+    """Periodically cleans up old history logs."""
     while True:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=HISTORY_CLEAN_HOURS)
         result = await price_update_history_collection.delete_many({"timestamp": {"$lt": cutoff}})
@@ -151,6 +156,7 @@ async def cleanup():
 
 # ----------------- Main -----------------
 async def main():
+    """Main async entrypoint."""
     queue = asyncio.Queue()
     async with aiohttp.ClientSession() as session:
         workers = [asyncio.create_task(worker(queue, session)) for _ in range(WORKERS)]
