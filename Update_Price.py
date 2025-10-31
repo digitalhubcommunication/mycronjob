@@ -11,7 +11,10 @@ load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
 LOG_FILE = os.getenv("LOG_FILE", "Update_PriceCron_Queue.log")
-WORKERS = int(os.getenv("WORKERS", 100))
+
+# Adjustable tuning
+WORKERS = int(os.getenv("WORKERS", 20))  # reduced from 100 → 20
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))  # max concurrent network calls
 SCHEDULER_INTERVAL = int(os.getenv("SCHEDULER_INTERVAL", 30))
 HISTORY_CLEAN_HOURS = int(os.getenv("HISTORY_CLEAN_HOURS", 3))
 
@@ -21,7 +24,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
-print(f"🚀 Price Update Worker started with {WORKERS} concurrent workers...")
+print(f"🚀 Safe Price Update Worker started with {WORKERS} workers and rate limit {RATE_LIMIT}...")
 
 # ----------------- MongoDB Setup -----------------
 client = AsyncIOMotorClient(MONGO_URI)
@@ -64,17 +67,20 @@ async def log_event(job, event_type, error=None):
     await price_update_history_collection.insert_one(doc)
     logging.info(f"🪶 {event_type.upper()} | {job.get('url')} | User: {job.get('user_id')}")
 
-# ----------------- HTTP Request with Retry -----------------
+# ----------------- HTTP Request (Rate-Limited) -----------------
+semaphore = asyncio.Semaphore(RATE_LIMIT)
+
 async def fetch_with_retry(session, url, retries=3, delay=3):
-    for attempt in range(retries):
-        try:
-            async with session.get(url, timeout=30) as resp:
-                return resp.status
-        except Exception as e:
-            if attempt < retries - 1:
-                await asyncio.sleep(delay * (attempt + 1))
-            else:
-                raise e
+    async with semaphore:  # ✅ Global rate limit control
+        for attempt in range(retries):
+            try:
+                async with session.head(url, timeout=20) as resp:  # ✅ lightweight HEAD request
+                    return resp.status
+            except Exception as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay * (attempt + 1))
+                else:
+                    raise e
 
 # ----------------- Worker -----------------
 async def worker(queue, session):
@@ -85,24 +91,23 @@ async def worker(queue, session):
             status = await fetch_with_retry(session, job["url"])
             now = datetime.now(timezone.utc)
 
-            # Determine next interval based on result
             if status == 200:
                 await log_event(job, "completed")
-                next_run = now + timedelta(minutes=30)  # ✅ next after 30 minutes
+                next_run = now + timedelta(minutes=30)
             else:
                 await log_event(job, f"failed ({status})")
-                next_run = now + timedelta(minutes=10)  # ⚠️ retry after 10 minutes
+                next_run = now + timedelta(minutes=10)
 
         except Exception as e:
             await log_event(job, "error", str(e))
-            next_run = datetime.now(timezone.utc) + timedelta(minutes=10)  # ⚠️ retry after 10 minutes
+            next_run = datetime.now(timezone.utc) + timedelta(minutes=10)
 
         finally:
-            # Update next run time in DB
             await price_update_collection.update_one(
                 {"_id": job["_id"]},
                 {"$set": {"last_run": next_run.isoformat()}}
             )
+            await asyncio.sleep(1)  # ✅ small cooldown between jobs
             queue.task_done()
 
 # ----------------- Scheduler -----------------
@@ -127,6 +132,7 @@ async def scheduler(queue):
                     if not last_run or now >= last_run:
                         await queue.put(job)
                         logging.info(f"⏱️ Scheduled job for user {user_id}: {job['url']}")
+                        await asyncio.sleep(0.5)  # ✅ stagger scheduling slightly
 
             await asyncio.sleep(SCHEDULER_INTERVAL)
 
